@@ -63,9 +63,20 @@ def test_scan_all_cli_fails_on_load_failure(tmp_path, variant):
     multi = _make_tree(tmp_path, variant)
     env = {**os.environ, "PYTHONPATH": str(Path(__file__).parent.parent)}
     proc = subprocess.run(
-        [sys.executable, "-m", "skill_scanner.cli.cli", "scan-all", str(multi), "--format", "sarif",
-         "--fail-on-severity", "high"],
-        capture_output=True, text=True, env=env,
+        [
+            sys.executable,
+            "-m",
+            "skill_scanner.cli.cli",
+            "scan-all",
+            str(multi),
+            "--format",
+            "sarif",
+            "--fail-on-severity",
+            "high",
+        ],
+        capture_output=True,
+        text=True,
+        env=env,
     )
     assert proc.returncode == 1, proc.stderr
     sarif = json.loads(proc.stdout)

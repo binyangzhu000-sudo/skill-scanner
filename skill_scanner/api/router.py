@@ -856,10 +856,7 @@ async def scan_uploaded_skill(
             names = ", ".join(sorted(d.relative_to(extracted_dir).as_posix() for d in skill_roots))
             raise HTTPException(
                 status_code=400,
-                detail=(
-                    f"Archive contains {len(skill_roots)} separate skills ({names}); "
-                    "upload one skill per archive"
-                ),
+                detail=(f"Archive contains {len(skill_roots)} separate skills ({names}); upload one skill per archive"),
             )
 
         skill_dir = skill_roots[0]

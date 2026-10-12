@@ -43,8 +43,6 @@ def test_ransomware_chain_long_identifier_line_scans_in_bounded_time():
 def test_ransomware_chain_still_detected():
     rule = {r.id: r for r in RuleLoader().load_rules()}["MALWARE_RANSOMWARE_IMPLEMENTATION_CHAIN"]
     code = (
-        "for f in root.rglob('*'):\n"
-        "    data = Fernet(key).encrypt(f.read_bytes())\n"
-        "    open(RANSOM_NOTE).write(msg)\n"
+        "for f in root.rglob('*'):\n    data = Fernet(key).encrypt(f.read_bytes())\n    open(RANSOM_NOTE).write(msg)\n"
     )
     assert rule.scan_content(code, "a.py")
