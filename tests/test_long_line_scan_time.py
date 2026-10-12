@@ -27,3 +27,24 @@ def test_eval_exclude_still_applies_to_commented_lines():
     assert rule.scan_content('eval "$1"\n', "a.sh")
     assert not rule.scan_content('# eval "$1"\n', "a.sh")
     assert not rule.scan_content('x=1 # eval "$1"\n', "a.sh")
+
+
+def test_ransomware_chain_long_identifier_line_scans_in_bounded_time():
+    rule = {r.id: r for r in RuleLoader().load_rules()}["MALWARE_RANSOMWARE_IMPLEMENTATION_CHAIN"]
+    content = "#" + "a" * (64 * 1024) + "\n"
+
+    start = time.perf_counter()
+    rule.scan_content(content, "scripts/run.py")
+    elapsed = time.perf_counter() - start
+
+    assert elapsed < 2.0, f"scan of a single 64 KB line took {elapsed:.1f}s"
+
+
+def test_ransomware_chain_still_detected():
+    rule = {r.id: r for r in RuleLoader().load_rules()}["MALWARE_RANSOMWARE_IMPLEMENTATION_CHAIN"]
+    code = (
+        "for f in root.rglob('*'):\n"
+        "    data = Fernet(key).encrypt(f.read_bytes())\n"
+        "    open(RANSOM_NOTE).write(msg)\n"
+    )
+    assert rule.scan_content(code, "a.py")
