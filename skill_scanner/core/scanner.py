@@ -598,6 +598,36 @@ class SkillScanner:
             scan_metadata=policy_meta,
         )
 
+    def _scan_load_failure(self, skill_directory: Path, error: SkillLoadError) -> ScanResult:
+        """Report a skill that could not be loaded as a HIGH finding.
+
+        A package that was never analyzed must not look clean in any output
+        format or exit code.
+        """
+
+        started = time.time()
+        finding = Finding(
+            id="SKILL_LOAD_FAILED",
+            rule_id="SKILL_LOAD_FAILED",
+            category=ThreatCategory.POLICY_VIOLATION,
+            severity=Severity.HIGH,
+            title="Skill could not be loaded and was not analyzed",
+            description=f"The skill failed to load, so none of its content was scanned: {error}",
+            file_path=skill_directory.name,
+            remediation="Fix the load error (for example invalid UTF-8 or a symlinked SKILL.md) and rescan.",
+            analyzer="skill_loader",
+            metadata={"content_scanned": False},
+        )
+        return ScanResult(
+            skill_name=skill_directory.name,
+            skill_directory=str(skill_directory.absolute()),
+            findings=[finding],
+            scan_duration_seconds=time.time() - started,
+            analyzers_used=["skill_loader"],
+            analyzers_failed=[],
+            scan_metadata={"loader": {"content_scanned": False, "error": str(error)}},
+        )
+
     # ------------------------------------------------------------------
     # Shared single-skill scanning logic (used by both scan_skill and
     # scan_directory for identical behaviour).
@@ -1588,6 +1618,7 @@ class SkillScanner:
             except SkillLoadError as e:
                 logger.warning("Failed to load %s: %s", skill_dir, e)
                 report.skills_skipped.append({"skill": str(skill_dir), "reason": str(e)})
+                report.add_scan_result(self._scan_load_failure(skill_dir, e))
                 continue
             except Exception as e:
                 logger.error("Unexpected error scanning %s: %s", skill_dir, e, exc_info=True)

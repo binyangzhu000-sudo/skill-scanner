@@ -1378,6 +1378,15 @@ rules:
       enabled: true
     description: "Skill manifest exceeded the hard loader size limit and was blocked without reading content"
 
+  SKILL_LOAD_FAILED:
+    source: python
+    analyzer: skill_loader
+    category: policy_violation
+    severity: HIGH
+    knobs:
+      enabled: true
+    description: "Skill could not be loaded (for example invalid UTF-8 or a symlinked SKILL.md) and was not analyzed"
+
   FINDING_OUTPUT_NORMALIZATION:
     source: python
     analyzer: scanner
