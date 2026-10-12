@@ -434,15 +434,9 @@ class SkillLoader:
             except (FileValidationError, OSError, ValueError):
                 continue
 
-            # Skip .git/ directory only (version control metadata, not an attack vector).
-            # All other hidden files and __pycache__ are now discovered so they can be
-            # flagged and scanned by downstream analyzers.
-            #
-            # Important: Skills may live under hidden parent directories like `.claude/skills/`.
-            # We only want to skip .git *inside* the skill package, not its parents.
-            rel_parts = path.relative_to(skill_directory).parts
-            if ".git" in rel_parts[:-1]:
-                continue
+            # Every file is discovered, including hidden files, __pycache__ and anything
+            # under a .git directory, so that downstream analyzers can flag or scan it.
+            # Skipping any directory by name would let a payload hide in it.
 
             relative_path = str(resolved.relative_to(skill_root))
             file_type = get_file_type(resolved)

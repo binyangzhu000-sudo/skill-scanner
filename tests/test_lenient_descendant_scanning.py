@@ -146,19 +146,18 @@ def test_rejected_parent_does_not_hide_markdown_descendant(recording_scanner, tm
     assert any(item["skill"] == str(parent) for item in report.skills_skipped)
 
 
-def test_uncovered_descendant_is_still_scanned(recording_scanner, tmp_path):
+def test_git_dir_descendant_is_covered_by_parent_scan(recording_scanner, tmp_path):
     scanner, analyzer = recording_scanner
     parent = tmp_path / "weather"
     write_skill(parent)
-    # The parent loader excludes .git contents; a nested candidate must not
-    # be discarded solely because its resolved path is inside the parent.
+    # The parent loader scans .git contents, so a nested markdown candidate there
+    # is covered by the parent and is not analyzed twice.
     guide = write_markdown(parent / ".git" / "notes" / "guide.md")
 
     scanner.scan_directory(tmp_path, recursive=True, lenient=True)
 
-    assert {s.directory for s in analyzer.skills} == {parent, guide.parent}
-    assert guide not in {f.path for f in analyzer.skills[0].files}
-    assert guide in {f.path for s in analyzer.skills for f in s.files}
+    assert [s.directory for s in analyzer.skills] == [parent]
+    assert guide in {f.path for f in analyzer.skills[0].files}
 
 
 def test_failed_parent_analysis_does_not_hide_descendant(recording_scanner, tmp_path, monkeypatch):
