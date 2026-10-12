@@ -1378,6 +1378,15 @@ rules:
       enabled: true
     description: "Skill manifest exceeded the hard loader size limit and was blocked without reading content"
 
+  SYMLINK_NOT_SCANNED:
+    source: python
+    analyzer: skill_loader
+    category: policy_violation
+    severity: HIGH
+    knobs:
+      enabled: true
+    description: "Symlink inside the skill was not followed, so its content was not analyzed"
+
   SKILL_LOAD_FAILED:
     source: python
     analyzer: skill_loader

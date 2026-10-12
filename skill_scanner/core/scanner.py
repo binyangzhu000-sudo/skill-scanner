@@ -38,6 +38,7 @@ from .analyzers.base import BaseAnalyzer
 from .analyzers.llm_request_handler import _add_token_usage, _empty_token_usage
 from .cel import CelGate, CelMode, CelRule, CelTelemetry
 from .extractors.content_extractor import ContentExtractor
+from .finding_identity import stable_finding_suffix
 from .loader import SkillLoader, SkillLoadError
 from .models import Finding, Report, ScanResult, Severity, Skill, SkillManifest, ThreatCategory
 from .scan_policy import ScanPolicy
@@ -633,6 +634,35 @@ class SkillScanner:
     # scan_directory for identical behaviour).
     # ------------------------------------------------------------------
 
+    @staticmethod
+    def _symlink_findings(skill: Skill) -> list[Finding]:
+        """One finding per symlink the loader refused to follow."""
+        findings: list[Finding] = []
+        for entry in skill.load_metadata.get("skipped_symlinks", []):
+            path = str(entry.get("path", ""))
+            escapes = bool(entry.get("escapes_skill_root"))
+            findings.append(
+                Finding(
+                    id=f"SYMLINK_NOT_SCANNED_{stable_finding_suffix(path)}",
+                    rule_id="SYMLINK_NOT_SCANNED",
+                    category=ThreatCategory.POLICY_VIOLATION,
+                    severity=Severity.HIGH if escapes else Severity.MEDIUM,
+                    title="Symlink in skill was not scanned",
+                    description=(
+                        f"'{path}' is a symbolic link ({entry.get('kind', 'unknown')}) pointing to "
+                        f"'{entry.get('target', '')}'"
+                        + (", outside the skill directory" if escapes else "")
+                        + ". Symlinks are not followed, so the content behind it was not analyzed "
+                        "but may be used once the skill is copied or installed."
+                    ),
+                    file_path=path,
+                    remediation="Replace the symlink with the real file or directory contents and rescan.",
+                    analyzer="skill_loader",
+                    metadata={k: entry[k] for k in ("target", "kind", "escapes_skill_root") if k in entry},
+                )
+            )
+        return findings
+
     def _scan_single_skill(
         self,
         skill: Skill,
@@ -700,6 +730,7 @@ class SkillScanner:
                         metadata=dict(load_telemetry),
                     )
                 )
+            all_findings.extend(self._symlink_findings(skill))
             # Include any archive extraction findings (zip bombs, path traversal, etc.)
             all_findings.extend(extraction_result.findings)
             analyzer_names: list[str] = []
