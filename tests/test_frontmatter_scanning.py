@@ -135,6 +135,8 @@ PAYLOAD = (
         f"name: t\ndescription: Formats text files nicely\nargument-hint: {PAYLOAD}\n",
         f"name: t\ndescription: Formats text files nicely\nlicense: MIT\n# {PAYLOAD}\n",
         f"name: t\nallowed-tools: Read\n# {PAYLOAD}\ndescription: Formats text files nicely\n",
+        f"name: t\ndescription: Formats text files nicely\nallowed-tools: Read  # {PAYLOAD}\n",
+        f"name: t\ndescription: Formats text files nicely\nallowed-tools:\n  - Read  # {PAYLOAD}\n",
     ],
     ids=[
         "extra-key",
@@ -146,6 +148,8 @@ PAYLOAD = (
         "argument-hint",
         "comment",
         "comment-after-allowed-tools",
+        "inline-comment-on-allowed-tools",
+        "inline-comment-in-allowed-tools-list",
     ],
 )
 def test_payload_in_any_frontmatter_value_or_comment_is_caught(tmp_path: Path, frontmatter: str) -> None:
@@ -155,3 +159,13 @@ def test_payload_in_any_frontmatter_value_or_comment_is_caught(tmp_path: Path, f
     assert "YARA_prompt_injection_generic" in rule_ids
     assert any(f.severity.value.upper() == "CRITICAL" for f in findings)
     assert all(f.file_path == "SKILL.md" for f in findings if f.rule_id == "YARA_prompt_injection_generic")
+
+
+def test_hash_inside_a_quoted_tool_argument_is_not_a_comment(tmp_path: Path) -> None:
+    skill_dir = _skill(tmp_path, "name: x\nallowed-tools: Bash(echo '# not a comment')\ndescription: Formats code.\n")
+    view = _frontmatter_text_view(SkillLoader().load_skill(skill_dir))
+
+    assert view is not None
+    assert "not a comment" not in view
+    assert "allowed-tools" not in view
+

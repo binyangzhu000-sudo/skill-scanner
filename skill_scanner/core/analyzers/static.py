@@ -1533,11 +1533,26 @@ def _frontmatter_text_view(skill: Skill) -> str | None:
             continue
         if _FRONTMATTER_TOP_LEVEL_KEY.match(line):
             in_text_field = not _FRONTMATTER_NON_TEXT_FIELD.match(line)
-        # Comments are never parsed into the manifest, so scan them wherever they sit.
-        kept.append(line if in_text_field or line.lstrip().startswith("#") else "")
+        # Comments are never parsed into the manifest, so scan them wherever they sit,
+        # including an inline comment after an excluded field's value.
+        kept.append(line if in_text_field or line.lstrip().startswith("#") else _yaml_inline_comment(line))
     if not any(kept):
         return None
     return "\n".join(kept)
+
+
+def _yaml_inline_comment(line: str) -> str:
+    """Return the inline ``# comment`` of a YAML line (a ``#`` outside quotes after whitespace), else ``""``."""
+    quote: str | None = None
+    for i, ch in enumerate(line):
+        if quote:
+            if ch == quote:
+                quote = None
+        elif ch in "'\"":
+            quote = ch
+        elif ch == "#" and i > 0 and line[i - 1] in " \t":
+            return line[i:]
+    return ""
 
 
 class StaticAnalyzer(BaseAnalyzer):
