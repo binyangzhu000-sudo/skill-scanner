@@ -89,4 +89,3 @@ def test_symlink_finding_passes_the_rule_contract(tmp_path):
     assert any(f.rule_id == "SYMLINK_NOT_SCANNED" for f in result.findings)
     assert result.scan_metadata["rule_contract"]["status"] == "passed"
     assert result.analyzers_failed == []
-

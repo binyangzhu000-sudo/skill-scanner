@@ -89,7 +89,9 @@ def test_load_failure_respects_scoped_suppressions(tmp_path):
 
     multi = _make_tree(tmp_path, "bad_utf8")
     policy = ScanPolicy.default()
-    policy.suppressions = [suppression_from_dict({"rule_id": "SKILL_LOAD_FAILED", "skills": ["evil"], "reason": "reviewed"})]
+    policy.suppressions = [
+        suppression_from_dict({"rule_id": "SKILL_LOAD_FAILED", "skills": ["evil"], "reason": "reviewed"})
+    ]
 
     report = SkillScanner(policy=policy).scan_directory(multi)
     evil = {r.skill_name: r for r in report.scan_results}["evil"]
@@ -97,4 +99,3 @@ def test_load_failure_respects_scoped_suppressions(tmp_path):
     assert [f.rule_id for f in evil.suppressed_findings] == ["SKILL_LOAD_FAILED"]
     assert evil.findings == []
     assert evil.scan_metadata["rule_contract"]["status"] == "passed"
-

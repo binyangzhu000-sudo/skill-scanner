@@ -168,4 +168,3 @@ def test_hash_inside_a_quoted_tool_argument_is_not_a_comment(tmp_path: Path) -> 
     assert view is not None
     assert "not a comment" not in view
     assert "allowed-tools" not in view
-
