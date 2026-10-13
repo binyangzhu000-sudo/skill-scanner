@@ -77,3 +77,16 @@ def test_skill_without_symlinks_has_no_symlink_finding(tmp_path):
     skill = _skill(tmp_path)
     (skill / "scripts" / "real.py").write_text("print('hi')\n")
     assert _symlink_findings(skill) == []
+
+
+def test_symlink_finding_passes_the_rule_contract(tmp_path):
+    skill = _skill(tmp_path)
+    (skill / "scripts" / "helper.py").write_text("print('hi')\n")
+    os.symlink("helper.py", skill / "scripts" / "alias.py")
+
+    result = SkillScanner().scan_skill(skill)
+
+    assert any(f.rule_id == "SYMLINK_NOT_SCANNED" for f in result.findings)
+    assert result.scan_metadata["rule_contract"]["status"] == "passed"
+    assert result.analyzers_failed == []
+

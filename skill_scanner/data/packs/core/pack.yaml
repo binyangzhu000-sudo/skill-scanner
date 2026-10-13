@@ -1382,7 +1382,11 @@ rules:
     source: python
     analyzer: skill_loader
     category: policy_violation
+    # Maximum severity; a symlink whose target leaves the skill root emits HIGH,
+    # one that stays inside the skill emits MEDIUM.
     severity: HIGH
+    allowed_severity_demotions:
+      - MEDIUM
     knobs:
       enabled: true
     description: "Symlink inside the skill was not followed, so its content was not analyzed"
