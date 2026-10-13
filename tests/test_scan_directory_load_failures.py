@@ -81,3 +81,20 @@ def test_scan_all_cli_fails_on_load_failure(tmp_path, variant):
     assert proc.returncode == 1, proc.stderr
     sarif = json.loads(proc.stdout)
     assert any(r["ruleId"] == "SKILL_LOAD_FAILED" for r in sarif["runs"][0]["results"])
+
+
+def test_load_failure_respects_scoped_suppressions(tmp_path):
+    from skill_scanner.core.scan_policy import ScanPolicy
+    from skill_scanner.core.suppressions import suppression_from_dict
+
+    multi = _make_tree(tmp_path, "bad_utf8")
+    policy = ScanPolicy.default()
+    policy.suppressions = [suppression_from_dict({"rule_id": "SKILL_LOAD_FAILED", "skills": ["evil"], "reason": "reviewed"})]
+
+    report = SkillScanner(policy=policy).scan_directory(multi)
+    evil = {r.skill_name: r for r in report.scan_results}["evil"]
+
+    assert [f.rule_id for f in evil.suppressed_findings] == ["SKILL_LOAD_FAILED"]
+    assert evil.findings == []
+    assert evil.scan_metadata["rule_contract"]["status"] == "passed"
+

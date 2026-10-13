@@ -603,10 +603,25 @@ class SkillScanner:
         """Report a skill that could not be loaded as a HIGH finding.
 
         A package that was never analyzed must not look clean in any output
-        format or exit code.
+        format or exit code. The finding goes through the same contract,
+        scoped-suppression and CEL steps as the size-limit rejection above.
         """
 
         started = time.time()
+        proof: dict[str, Any] = {"content_scanned": False, "error": str(error)}
+        synthetic_skill = Skill(
+            directory=skill_directory,
+            manifest=SkillManifest(
+                name=skill_directory.name,
+                description="(skill could not be loaded)",
+            ),
+            skill_md_path=skill_directory / "SKILL.md",
+            instruction_body="",
+            files=[],
+            referenced_files=[],
+            manifest_complete=False,
+            load_metadata=dict(proof),
+        )
         finding = Finding(
             id="SKILL_LOAD_FAILED",
             rule_id="SKILL_LOAD_FAILED",
@@ -619,14 +634,42 @@ class SkillScanner:
             analyzer="skill_loader",
             metadata={"content_scanned": False},
         )
+
+        checked, invalid_ids, contract_errors, _ = self._validate_bundled_python_findings([finding])
+        suppressed_findings: list[Finding] = []
+        findings = self._apply_scoped_suppressions(
+            [finding],
+            synthetic_skill.name,
+            suppressed_findings,
+            invalid_ids,
+        )
+        findings, cel_telemetry = self._apply_cel_with_contract(
+            synthetic_skill,
+            findings,
+            invalid_ids,
+        )
+        policy_meta: dict[str, Any] = self._policy_fingerprint_metadata()
+        policy_meta["cel"] = cel_telemetry.to_dict()
+        if suppressed_findings:
+            policy_meta["suppressions"] = build_suppression_summary(suppressed_findings)
+        policy_meta["rule_contract"] = {
+            "status": "failed" if invalid_ids else "passed",
+            "schema_version": 2,
+            "checked": checked,
+            "invalid_findings": len(invalid_ids),
+            "errors": contract_errors[:100],
+        }
+        policy_meta["loader"] = dict(proof)
+        self._annotate_findings_with_policy([*findings, *suppressed_findings], policy_meta)
         return ScanResult(
             skill_name=skill_directory.name,
             skill_directory=str(skill_directory.absolute()),
-            findings=[finding],
+            findings=findings,
+            suppressed_findings=suppressed_findings,
             scan_duration_seconds=time.time() - started,
             analyzers_used=["skill_loader"],
             analyzers_failed=[],
-            scan_metadata={"loader": {"content_scanned": False, "error": str(error)}},
+            scan_metadata=policy_meta,
         )
 
     # ------------------------------------------------------------------
