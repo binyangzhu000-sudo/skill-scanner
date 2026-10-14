@@ -211,6 +211,45 @@ class TestLLMAnalyzerInitialization:
             "api_base": "https://orca.internal/v1",
         }
 
+    def test_atlascloud_model_prefix_routes_via_openai_adapter(self):
+        """Atlas Cloud model prefix routes through the OpenAI LiteLLM adapter with the default endpoint."""
+        analyzer = LLMAnalyzer(
+            model="atlascloud/deepseek-ai/deepseek-v4-flash",
+            api_key="test-key",
+        )
+
+        assert analyzer.model == "openai/deepseek-ai/deepseek-v4-flash"
+        assert analyzer.provider_config.is_atlascloud
+        assert analyzer.provider_config.get_request_params() == {
+            "api_key": "test-key",
+            "api_base": "https://api.atlascloud.ai/v1",
+        }
+
+    def test_atlascloud_provider_override_uses_default_endpoint(self):
+        """The explicit atlascloud provider override maps to the OpenAI adapter."""
+        analyzer = LLMAnalyzer(
+            model="deepseek-ai/deepseek-v4-flash",
+            provider="atlascloud",
+            api_key="test-key",
+        )
+
+        assert analyzer.model == "openai/deepseek-ai/deepseek-v4-flash"
+        assert analyzer.provider_config.is_atlascloud
+        assert analyzer.provider_config.get_request_params()["api_base"] == "https://api.atlascloud.ai/v1"
+
+    def test_atlascloud_custom_base_url_overrides_default_endpoint(self):
+        """An explicit base_url overrides the Atlas Cloud default endpoint."""
+        analyzer = LLMAnalyzer(
+            model="atlascloud/deepseek-ai/deepseek-v4-flash",
+            api_key="test-key",
+            base_url="https://atlas.internal/v1",
+        )
+
+        assert analyzer.provider_config.get_request_params() == {
+            "api_key": "test-key",
+            "api_base": "https://atlas.internal/v1",
+        }
+
 
 class TestPromptLoading:
     """Test prompt loading functionality."""
