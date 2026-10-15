@@ -39,6 +39,7 @@ from .analyzers.llm_request_handler import _add_token_usage, _empty_token_usage
 from .cel import CelGate, CelMode, CelRule, CelTelemetry
 from .extractors.content_extractor import ContentExtractor
 from .finding_identity import stable_finding_suffix
+from .finding_taxonomy import annotate_findings_taxonomy, taxonomy_scan_metadata
 from .loader import SkillLoader, SkillLoadError
 from .models import Finding, Report, ScanResult, Severity, Skill, SkillManifest, ThreatCategory
 from .scan_policy import ScanPolicy
@@ -577,6 +578,8 @@ class SkillScanner:
             "errors": contract_errors[:100],
         }
         policy_meta["loader"] = dict(proof)
+        annotate_findings_taxonomy([*findings, *suppressed_findings], self.rule_registry)
+        policy_meta["taxonomy"] = taxonomy_scan_metadata(findings)
         self._annotate_findings_with_policy([*findings, *suppressed_findings], policy_meta)
 
         analyzability = AnalyzabilityReport(
@@ -660,6 +663,8 @@ class SkillScanner:
             "errors": contract_errors[:100],
         }
         policy_meta["loader"] = dict(proof)
+        annotate_findings_taxonomy([*findings, *suppressed_findings], self.rule_registry)
+        policy_meta["taxonomy"] = taxonomy_scan_metadata(findings)
         self._annotate_findings_with_policy([*findings, *suppressed_findings], policy_meta)
         return ScanResult(
             skill_name=skill_directory.name,
@@ -1046,6 +1051,9 @@ class SkillScanner:
                     "demoted": len(demoted),
                     "audit": adjudicator_audit,
                 }
+            # Every finding, suppressed or not, leaves with Cisco AI taxonomy codes.
+            annotate_findings_taxonomy([*all_findings, *suppressed_findings], self.rule_registry)
+            policy_meta["taxonomy"] = taxonomy_scan_metadata(all_findings)
             # Preserve policy provenance on suppressed findings.
             self._annotate_findings_with_policy([*all_findings, *suppressed_findings], policy_meta)
 
@@ -1737,6 +1745,7 @@ class SkillScanner:
                 if self.policy.disabled_rules:
                     all_cross_findings = [f for f in all_cross_findings if f.rule_id not in self.policy.disabled_rules]
                 self._apply_severity_overrides(all_cross_findings)
+                annotate_findings_taxonomy(all_cross_findings, self.rule_registry)
                 report.add_cross_skill_findings(all_cross_findings)
 
         return report

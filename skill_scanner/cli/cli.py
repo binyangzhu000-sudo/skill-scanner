@@ -34,6 +34,7 @@ from rich.markdown import Markdown
 from .. import __version__
 from ..core.analyzer_factory import LLM_CONFIGURATION_HINT, AnalyzerConfigurationError, build_analyzers
 from ..core.cel.models import CelMode
+from ..core.finding_taxonomy import refresh_taxonomy_scan_metadata
 from ..core.loader import SkillLoadError
 from ..core.reporters.html_reporter import HTMLReporter
 from ..core.reporters.json_reporter import JSONReporter
@@ -647,6 +648,7 @@ def scan_command(args: argparse.Namespace) -> int:
         # Strip false positives from output unless --verbose
         if not getattr(args, "verbose", False):
             result.findings = [f for f in result.findings if not f.metadata.get("meta_false_positive", False)]
+        refresh_taxonomy_scan_metadata(result)
 
         args._result_or_report = result
         _write_output(args, _format_output(args, result))
@@ -780,6 +782,8 @@ def scan_all_command(args: argparse.Namespace) -> int:
             report.cross_skill_findings = [
                 f for f in report.cross_skill_findings if not f.metadata.get("meta_false_positive", False)
             ]
+        for result in report.scan_results:
+            refresh_taxonomy_scan_metadata(result)
 
         # Recalculate report totals after meta-analysis and FP stripping
         all_findings = [f for r in report.scan_results for f in r.findings] + report.cross_skill_findings
@@ -925,6 +929,8 @@ def scan_repo_command(args: argparse.Namespace) -> int:
                     report.cross_skill_findings = [
                         f for f in report.cross_skill_findings if not f.metadata.get("meta_false_positive", False)
                     ]
+                for result in report.scan_results:
+                    refresh_taxonomy_scan_metadata(result)
 
                 # Recalculate report totals after meta-analysis and FP stripping
                 all_findings = [f for r in report.scan_results for f in r.findings] + report.cross_skill_findings
