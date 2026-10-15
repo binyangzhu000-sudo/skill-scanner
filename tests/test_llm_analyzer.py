@@ -250,6 +250,26 @@ class TestLLMAnalyzerInitialization:
             "api_base": "https://atlas.internal/v1",
         }
 
+    @pytest.mark.parametrize(
+        ("prefix", "base", "expected"),
+        [
+            ("atlascloud", "https://api.atlascloud.ai/v1", "openai/{}"),
+            ("orcarouter", "https://api.orcarouter.ai/v1", "openai/{}"),
+        ],
+    )
+    @pytest.mark.parametrize(
+        "downstream",
+        ["google/gemini-2.5-pro", "google/vertex-model", "azure/gpt-4o"],
+    )
+    def test_gateway_provider_not_hijacked_by_downstream_model_name(self, prefix, base, expected, downstream):
+        """Gateway prefixes win over native gemini/vertex/azure substring detection."""
+        analyzer = LLMAnalyzer(model=f"{prefix}/{downstream}", api_key="test-key")
+        cfg = analyzer.provider_config
+
+        assert not (cfg.is_gemini or cfg.is_vertex or cfg.is_azure)
+        assert analyzer.model == expected.format(downstream)
+        assert cfg.get_request_params() == {"api_key": "test-key", "api_base": base}
+
 
 class TestPromptLoading:
     """Test prompt loading functionality."""
