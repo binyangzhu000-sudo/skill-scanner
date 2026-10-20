@@ -24,6 +24,7 @@ import os
 import re
 import sys
 from pathlib import Path
+from typing import Any
 
 import frontmatter
 
@@ -56,6 +57,21 @@ _SCRIPT_MAGIC_MIN_CONFIDENCE = 0.85
 def _quote_frontmatter_scalar(match: re.Match[str]) -> str:
     """Quote a YAML scalar while preserving literal backslashes and quotes."""
     return f"{match.group(1)}: {json.dumps(match.group(2), ensure_ascii=False)}"
+
+
+def frontmatter_parse_input(content: str) -> str:
+    """Return SKILL.md text exactly as it is handed to the frontmatter parser.
+
+    ``name`` and ``description`` values that contain ``:`` are quoted first so YAML
+    does not read them as mappings. The static analyzer composes the same text, so
+    the frontmatter values it scans are the ones the manifest gets.
+    """
+    if "---" in content:
+        parts = content.split("---", 2)
+        if len(parts) >= 3:
+            fm = _FRONTMATTER_QUOTE_RE.sub(_quote_frontmatter_scalar, parts[1])
+            return f"---{fm}---{parts[2]}"
+    return content
 
 
 def _classify_extensionless_script(path: Path, file_type: str) -> str:
@@ -194,7 +210,8 @@ class SkillLoader:
             raise SkillLoadError(f"SKILL.md not found in {skill_directory}")
 
         # Discover all files in the skill package
-        files = self._discover_files(skill_directory)
+        skipped_symlinks: list[dict[str, Any]] = []
+        files = self._discover_files(skill_directory, skipped_symlinks)
 
         # Extract referenced files from instruction body
         referenced_files = self._extract_referenced_files(instruction_body)
@@ -207,6 +224,8 @@ class SkillLoader:
             if synthetic_instruction_body
             else {}
         )
+        if skipped_symlinks:
+            load_metadata["skipped_symlinks"] = skipped_symlinks
         return Skill(
             directory=skill_directory,
             manifest=manifest,
@@ -315,12 +334,7 @@ class SkillLoader:
         """
         content = self._read_skill_text_file(skill_md_path, package_root=package_root)
         raw_content = content
-
-        if "---" in content:
-            parts = content.split("---", 2)
-            if len(parts) >= 3:
-                fm = _FRONTMATTER_QUOTE_RE.sub(_quote_frontmatter_scalar, parts[1])
-                content = f"---{fm}---{parts[2]}"
+        content = frontmatter_parse_input(content)
 
         # Parse with python-frontmatter
         try:
@@ -411,7 +425,32 @@ class SkillLoader:
 
         return manifest, body, body_line_offset
 
-    def _discover_files(self, skill_directory: Path) -> list[SkillFile]:
+    def _record_skipped_symlink(self, path: Path, skill_root: Path, sink: list[dict[str, Any]]) -> None:
+        """Remember a symlink that discovery refused to follow."""
+        try:
+            target = os.readlink(path)
+        except OSError:
+            target = ""
+        try:
+            inside = path.resolve().is_relative_to(skill_root.resolve())
+        except (OSError, RuntimeError, ValueError):
+            inside = False
+        try:
+            kind = "directory" if path.is_dir() else "file" if path.exists() else "dangling"
+        except OSError:
+            kind = "unknown"
+        sink.append(
+            {
+                "path": path.relative_to(skill_root).as_posix(),
+                "target": target,
+                "kind": kind,
+                "escapes_skill_root": not inside,
+            }
+        )
+
+    def _discover_files(
+        self, skill_directory: Path, skipped_symlinks: list[dict[str, Any]] | None = None
+    ) -> list[SkillFile]:
         """
         Discover all files in the skill package.
 
@@ -425,9 +464,14 @@ class SkillLoader:
         skill_root = skill_directory
 
         for path in skill_directory.rglob("*"):
-            if not path.is_file():
-                continue
             if path.is_symlink():
+                # Symlinks are never followed (the target could be anything), but
+                # they must not vanish silently: record them so the scanner can
+                # report each one.
+                if skipped_symlinks is not None:
+                    self._record_skipped_symlink(path, skill_root, skipped_symlinks)
+                continue
+            if not path.is_file():
                 continue
             try:
                 resolved = resolve_path_within_root(path, root=skill_root)

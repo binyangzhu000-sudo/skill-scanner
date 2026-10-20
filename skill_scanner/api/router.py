@@ -47,6 +47,7 @@ from ..core.analyzer_factory import LLM_CONFIGURATION_HINT, AnalyzerConfiguratio
 from ..core.cel.models import CelMode
 from ..core.cel.runtime import CelRuntimeUnavailable
 from ..core.exceptions import SkillLoadError
+from ..core.finding_taxonomy import refresh_taxonomy_scan_metadata
 from ..core.scan_policy import ScanPolicy
 from ..core.scanner import SkillScanner
 from ..llm_reasoning import LLMReasoningEffort, ReasoningConfigurationError
@@ -684,6 +685,7 @@ async def scan_skill(
                         skill=skill,
                     )
                     result.findings = filtered_findings
+                    refresh_taxonomy_scan_metadata(result)
                     result.analyzers_used.append("meta_analyzer")
                     if merge_meta_analyzer_usage is not None:
                         merge_meta_analyzer_usage(result, meta_analyzer)
@@ -847,7 +849,19 @@ async def scan_uploaded_skill(
         if not skill_dirs:
             raise HTTPException(status_code=400, detail="No SKILL.md found in uploaded archive")
 
-        skill_dir = skill_dirs[0].parent
+        # A SKILL.md nested inside another skill's directory is part of that
+        # skill; independent roots are separate skills this endpoint cannot
+        # report on together, so refuse rather than scan one and call it safe.
+        all_roots = sorted({p.parent for p in skill_dirs})
+        skill_roots = [d for d in all_roots if not any(o != d and d.is_relative_to(o) for o in all_roots)]
+        if len(skill_roots) > 1:
+            names = ", ".join(sorted(d.relative_to(extracted_dir).as_posix() for d in skill_roots))
+            raise HTTPException(
+                status_code=400,
+                detail=(f"Archive contains {len(skill_roots)} separate skills ({names}); upload one skill per archive"),
+            )
+
+        skill_dir = skill_roots[0]
 
         request = ScanRequest(
             skill_directory=str(skill_dir),
@@ -1021,6 +1035,7 @@ def _run_batch_scan(
                                     skill=skill,
                                 )
                                 result.findings = filtered_findings
+                                refresh_taxonomy_scan_metadata(result)
                                 result.analyzers_used.append("meta_analyzer")
                                 if merge_meta_analyzer_usage is not None:
                                     merge_meta_analyzer_usage(result, meta_analyzer)

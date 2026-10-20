@@ -68,6 +68,7 @@ Deep-dive pages live in [`docs/`](docs/README.md).
 | [Architecture](docs/architecture/index.md) | System design and components |
 | [CEL Decision Layer](docs/architecture/cel-decision-layer.md) | Typed facts, safety bounds, rollout modes, and telemetry |
 | [Threat Taxonomy](docs/architecture/threat-taxonomy.md) | Complete AITech threat taxonomy with examples |
+| [Taxonomy Reference](docs/architecture/taxonomy-reference.md) | Definitions of every AITech and AISubtech code |
 | [LLM Analyzer](docs/architecture/analyzers/llm-analyzer.md) | LLM configuration and usage |
 | [System One Analyzer](docs/architecture/analyzers/system-one-analyzer.md) | Optional advisory screening tier, and why it cannot gate |
 | [Meta-Analyzer](docs/architecture/analyzers/meta-analyzer.md) | Optional second-pass review (off by default; measured cost) |
@@ -405,9 +406,9 @@ on:
     paths: [".cursor/skills/**"]
 jobs:
   scan:
-    uses: cisco-ai-defense/skill-scanner/.github/workflows/scan-skills.yml@2.2.2
+    uses: cisco-ai-defense/skill-scanner/.github/workflows/scan-skills.yml@2.3.0
     with:
-      scanner_version: "2.2.2"
+      scanner_version: "2.3.0"
       skill_path: .cursor/skills
       policy: low-noise
       use_llm: true
@@ -432,7 +433,7 @@ Scan skills, with the judge, before every commit using the [pre-commit](https://
 # .pre-commit-config.yaml
 repos:
   - repo: https://github.com/cisco-ai-defense/skill-scanner
-    rev: 2.2.2  # the latest release tag (no "v" prefix)
+    rev: 2.3.0  # the latest release tag (no "v" prefix)
     hooks:
       - id: skill-scanner
 ```

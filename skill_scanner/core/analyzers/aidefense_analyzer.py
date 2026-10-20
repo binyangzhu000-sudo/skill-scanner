@@ -39,8 +39,28 @@ except ImportError:
     HTTPX_AVAILABLE = False
 
 from ...core.models import Finding, Severity, Skill, ThreatCategory
-from ...threats.threats import ThreatMapping
+from ...threats.cisco_ai_taxonomy import resolve_taxonomy_code
+from ...threats.threats import get_threat_codes
 from .base import BaseAnalyzer
+
+# AI Defense labels (guardrail rule names, violation and vulnerability types)
+# -> Cisco AI taxonomy code, from ThreatMapping.AI_DEFENSE_THREATS.  Coarse
+# classifications such as SECURITY_VIOLATION name no technique and are not in
+# that table, so those findings stay unmapped instead of receiving a guessed code.
+_AIDEFENSE_TAXONOMY: dict[str, str] = get_threat_codes("ai_defense")
+
+
+def _taxonomy_metadata(*labels: str | None) -> dict[str, str | None]:
+    """Return ``aitech``/``aisubtech`` for the first AI Defense label with a known code."""
+    for label in labels:
+        if not label:
+            continue
+        code = _AIDEFENSE_TAXONOMY.get(label.upper().replace("_", " ").strip())
+        aitech, aisubtech = resolve_taxonomy_code(code)
+        if aitech:
+            return {"aitech": aitech, "aisubtech": aisubtech}
+    return {}
+
 
 logger = logging.getLogger(__name__)
 
@@ -373,6 +393,7 @@ class AIDefenseAnalyzer(BaseAnalyzer):
                                 remediation="Review and address the security concern flagged by AI Defense",
                                 analyzer="aidefense",
                                 metadata={
+                                    **_taxonomy_metadata(classification),
                                     "classification": classification,
                                     "content_type": content_type,
                                     "is_safe": is_safe,
@@ -402,6 +423,7 @@ class AIDefenseAnalyzer(BaseAnalyzer):
                             remediation=f"Address the {rule_name.lower()} issue detected by AI Defense",
                             analyzer="aidefense",
                             metadata={
+                                **_taxonomy_metadata(rule_name, rule_classification),
                                 "rule_name": rule_name,
                                 "rule_id": rule.get("rule_id"),
                                 "classification": rule_classification,
@@ -507,6 +529,7 @@ class AIDefenseAnalyzer(BaseAnalyzer):
                                 remediation="Review and fix the code issue flagged by AI Defense",
                                 analyzer="aidefense",
                                 metadata={
+                                    **_taxonomy_metadata(classification),
                                     "classification": classification,
                                     "language": language,
                                     "is_safe": is_safe,
@@ -534,6 +557,7 @@ class AIDefenseAnalyzer(BaseAnalyzer):
                             remediation=f"Address the {rule_name.lower()} issue in the code",
                             analyzer="aidefense",
                             metadata={
+                                **_taxonomy_metadata(rule_name, rule_classification),
                                 "rule_name": rule_name,
                                 "classification": rule_classification,
                                 "language": language,
@@ -677,12 +701,6 @@ class AIDefenseAnalyzer(BaseAnalyzer):
             # Map category based on violation type
             category = self._map_violation_category(violation_type)
 
-            # Get AITech mapping if available
-            try:
-                aitech_mapping = ThreatMapping.get_threat_mapping("llm", violation_type.replace("_", " "))
-            except (ValueError, KeyError):
-                aitech_mapping = {}
-
             return Finding(
                 id=self._generate_id(f"AIDEFENSE_{violation_type}", file_path),
                 rule_id=f"AIDEFENSE_{violation_type}",
@@ -696,10 +714,9 @@ class AIDefenseAnalyzer(BaseAnalyzer):
                 remediation=violation.get("remediation", "Review and address the security concern"),
                 analyzer="aidefense",
                 metadata={
+                    **_taxonomy_metadata(violation_type),
                     "violation_type": violation_type,
                     "confidence": violation.get("confidence"),
-                    "aitech": aitech_mapping.get("aitech"),
-                    "aitech_name": aitech_mapping.get("aitech_name"),
                 },
             )
 
@@ -803,6 +820,7 @@ class AIDefenseAnalyzer(BaseAnalyzer):
                 remediation=vuln.get("remediation", "Fix the security vulnerability"),
                 analyzer="aidefense",
                 metadata={
+                    **_taxonomy_metadata(vuln_type),
                     "vuln_type": vuln_type,
                     "cwe": vuln.get("cwe"),
                     "language": language,

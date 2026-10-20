@@ -45,9 +45,23 @@ from ...core.static_analysis.context_extractor import (
 )
 from ...core.static_analysis.interprocedural.call_graph_analyzer import CallGraphAnalyzer
 from ...core.static_analysis.interprocedural.cross_file_analyzer import CrossFileAnalyzer, CrossFileCorrelation
+from ...threats.threats import get_threat_codes
 from .base import BaseAnalyzer
 
 logger = logging.getLogger(__name__)
+
+# BEHAVIOR_ALIGNMENT_* and BEHAVIOR_CROSSFILE_* rule IDs are built from the
+# threat name, so these findings pick their Cisco AI taxonomy code here rather
+# than from the pack manifest.  The codes come from
+# ThreatMapping.BEHAVIORAL_THREATS; only these names get one.
+ALIGNMENT_TAXONOMY: dict[str, str] = get_threat_codes(
+    "behavioral",
+    ("DATA EXFILTRATION", "CREDENTIAL THEFT", "COMMAND INJECTION", "HIDDEN FUNCTIONALITY", "ALIGNMENT_MISMATCH"),
+)
+CROSSFILE_TAXONOMY: dict[str, str] = get_threat_codes(
+    "behavioral",
+    ("exfiltration_chain", "credential_network_separation", "env_var_exfiltration"),
+)
 
 
 def _run_coroutine_sync(coro):
@@ -341,6 +355,7 @@ class BehavioralAnalyzer(BaseAnalyzer):
                 remediation=f"Review function {func_context.name} and ensure documentation matches implementation",
                 analyzer="behavioral",
                 metadata={
+                    "aisubtech": ALIGNMENT_TAXONOMY.get(threat_name),
                     "function_name": func_context.name,
                     "threat_name": threat_name,
                     "confidence": analysis.get("confidence"),
@@ -515,6 +530,7 @@ class BehavioralAnalyzer(BaseAnalyzer):
                 remediation=f"Review data flow across files: {', '.join(correlation.files_involved)}",
                 analyzer="behavioral",
                 metadata={
+                    "aisubtech": CROSSFILE_TAXONOMY.get(correlation.threat_type),
                     "files_involved": correlation.files_involved,
                     "threat_type": correlation.threat_type,
                     "evidence": correlation.evidence,
