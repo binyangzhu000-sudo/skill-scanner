@@ -225,8 +225,17 @@ def test_trusted_release_evidence_producer_is_pinned_offline_and_exact_sha() -> 
 
     scan_step = workflow.split("Run OFF plus exactly five active scans with OS-denied network", 1)[1]
     scan_step = scan_step.split("Resolve fixed release evidence artifact name", 1)[0]
-    assert "sudo iptables -I OUTPUT" in scan_step
-    assert "sudo ip6tables -I OUTPUT" in scan_step
+    # The scans run in their own network namespace; blocking the runner UID
+    # with iptables also cut off the runner agent and failed the job.
+    assert 'sudo unshare --net -- setpriv --reuid="$(id -u)"' in scan_step
+    assert 'env -i "${sandbox_env[@]}" bash "$scan_script"' in scan_step
+    # No supplementary groups (docker socket) and no_new_privs, so the scan
+    # cannot sudo or nsenter its way back to the host network.
+    assert "--clear-groups --no-new-privs" in scan_step
+    assert "--init-groups" not in scan_step
+    assert "scan sandbox can still use sudo" in scan_step
+    assert "sudo iptables" not in scan_step
+    assert "sudo ip6tables" not in scan_step
     assert "network isolation failed" in scan_step
     assert "from skill_scanner.core.analyzer_factory import build_analyzers" in scan_step
     assert "inspect.signature(build_analyzers).parameters" in scan_step
@@ -352,6 +361,10 @@ def test_detection_impact_scans_offline_with_credentials_removed() -> None:
     assert "network isolation failed" in run
     # Only an explicit environment reaches the scan, so no credential does.
     assert "env -i PATH=" in run
+    # No supplementary groups (docker socket) and no_new_privs, so no sudo escape.
+    assert "--clear-groups --no-new-privs" in run
+    assert "--init-groups" not in run
+    assert "scan sandbox can still use sudo" in run
     assert "--profile core" in run and "--arm static" in run
 
 
