@@ -182,3 +182,31 @@ def test_atlascloud_preserves_full_gateway_model_id(configured: str, expected: s
     assert model == expected
     # What LiteLLM would actually put on the wire for the Atlas request.
     assert get_llm_provider(model)[0] == expected.split("/", 1)[1]
+
+
+def test_conflicting_gateway_selection_is_rejected_before_routing() -> None:
+    from skill_scanner.core.analyzers.llm_provider_config import ProviderConfig
+
+    with pytest.raises(ValueError, match="Conflicting gateway selection"):
+        ProviderConfig(model="orcarouter/anthropic/claude-sonnet-5", api_key="k", provider="atlascloud")
+    with pytest.raises(ValueError, match="Conflicting gateway selection"):
+        ProviderConfig(model="atlascloud/qwen/qwen3.5-flash", api_key="k", provider="orcarouter")
+
+
+@pytest.mark.parametrize("model", ["atlascloud/qwen/qwen3.5-flash", "orcarouter/anthropic/claude-sonnet-5"])
+def test_gateway_honors_scanner_wide_base_url_env_when_no_base_url_passed(model: str) -> None:
+    from skill_scanner.core.analyzers.llm_provider_config import ProviderConfig
+
+    with patch.dict(os.environ, {"SKILL_SCANNER_LLM_BASE_URL": "https://gateway.internal/v1"}):
+        params = ProviderConfig(model=model, api_key="k").get_request_params()
+    assert params["api_base"] == "https://gateway.internal/v1"
+
+
+def test_atlascloud_default_endpoint_is_used_only_without_any_override() -> None:
+    from skill_scanner.core.analyzers.llm_provider_config import ProviderConfig
+
+    with patch.dict(os.environ, {}, clear=False):
+        os.environ.pop("SKILL_SCANNER_LLM_BASE_URL", None)
+        assert ProviderConfig(model="atlascloud/qwen/qwen3.5-flash", api_key="k").get_request_params()["api_base"] == ATLAS_URL
+        explicit = ProviderConfig(model="atlascloud/qwen/qwen3.5-flash", api_key="k", base_url="https://x/v1")
+        assert explicit.get_request_params()["api_base"] == "https://x/v1"

@@ -199,6 +199,15 @@ class ProviderConfig:
         # Gateway providers are classified first: the downstream model name
         # (e.g. ``atlascloud/google/gemini-2.5-pro``) must not trigger native
         # Gemini/Vertex/Azure credential handling or dispatch.
+        # An explicit provider names exactly one gateway: a model prefix that names
+        # the other one would otherwise route the key to the wrong endpoint.
+        for gateway in ("orcarouter", "atlascloud"):
+            other = "atlascloud" if gateway == "orcarouter" else "orcarouter"
+            if self.provider == gateway and model_lower.startswith(f"{other}/"):
+                raise ValueError(
+                    f"Conflicting gateway selection: provider={gateway!r} but model "
+                    f"{model!r} is prefixed for {other!r}. Use one gateway, or drop the prefix."
+                )
         self.is_orcarouter = self.provider == "orcarouter" or (
             not self.is_openai_compatible and model_lower.startswith("orcarouter/")
         )
@@ -206,6 +215,11 @@ class ProviderConfig:
             not self.is_openai_compatible and model_lower.startswith("atlascloud/")
         )
         is_gateway = self.is_orcarouter or self.is_atlascloud
+        if is_gateway and not self.base_url:
+            # Honor the scanner-wide endpoint override before falling back to the
+            # gateway's public default, so a key is never sent to the default host
+            # when the caller configured a different endpoint via the environment.
+            self.base_url = os.getenv("SKILL_SCANNER_LLM_BASE_URL") or None
         self.is_gemini = (
             not self.is_openai_compatible
             and not is_gateway
